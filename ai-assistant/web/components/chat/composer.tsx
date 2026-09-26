@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowUpIcon, SquareIcon } from "lucide-react";
+import { ArrowUpIcon, MicIcon, SquareIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { APP_CONFIG } from "@/lib/config";
@@ -23,11 +23,53 @@ export function Composer({
   autoFocus?: boolean;
 }) {
   const [value, setValue] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
+    setMounted(true);
     if (autoFocus && window.matchMedia("(min-width: 768px)").matches) ref.current?.focus();
   }, [autoFocus]);
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: any) => {
+        const resultIndex = event.resultIndex;
+        const transcript = event.results[resultIndex][0].transcript;
+        setValue((prev: string) => prev + (prev && !prev.endsWith(" ") ? " " : "") + transcript);
+      };
+
+      recognition.onerror = () => {
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) return;
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      recognitionRef.current.start();
+      setIsRecording(true);
+    }
+  };
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
@@ -66,7 +108,21 @@ export function Composer({
         enterKeyHint="send"
         className="field-sizing-content max-h-52 min-h-7 w-full resize-none bg-transparent py-1.5 text-[15px] leading-6 outline-none placeholder:text-muted-foreground"
       />
-      <div className="mt-1 flex items-center justify-end">
+      <div className="mt-1 flex items-center justify-end gap-2">
+        {mounted && recognitionRef.current && (
+          <Button
+            type="button"
+            size="icon"
+            onClick={toggleRecording}
+            aria-label={isRecording ? "Stop recording" : "Start speech-to-text"}
+            className={cn(
+              "rounded-full transition-colors",
+              isRecording ? "bg-red-500 text-white animate-pulse" : "opacity-70 hover:opacity-100"
+            )}
+          >
+            <MicIcon className="size-3.5" />
+          </Button>
+        )}
         <Button
           type="submit"
           size="icon"
