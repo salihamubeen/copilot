@@ -33,7 +33,7 @@
 16. [Troubleshooting](#troubleshooting)
 17. [Roadmap](#roadmap)
 18. [Contributing](#contributing)
-19. [License](#license)
+
 
 ---
 
@@ -285,18 +285,6 @@ cd api && uv run ruff check . && uv run ruff format --check . && uv run pytest
 cd web && npm run typecheck && npm run build
 ```
 
----
-
-## Production Checklist
-
-- [ ] Serve both services over **HTTPS**.
-- [ ] Keep response **buffering off** for `/api/chat` so replies stream.
-- [ ] সেগুলো set `ENVIRONMENT=production` and a real `CORS_ORIGINS`.
-- [ ] Add **authentication and rate limiting**.
-- [ ] Protect `/api/voice/session` and set `VOICE_AGENT_TOKEN`.
-- [ ] Never commit `.env` files, API keys, or credentials.
-
----
 
 ## Security and Privacy Notes
 
