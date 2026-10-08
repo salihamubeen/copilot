@@ -1,6 +1,6 @@
 # Voice-Enabled, Local-AI Assistant
 
-> An interactive AI assistant with **real-time voice conversation**, **photo and PDF understanding**, and a **local-first model strategy**: it runs models on your own machine through Ollama and falls back to cloud providers (Anthropic, OpenAI, Google Gemini, xAI Grok, Meta Llama) only when needed.
+> An interactive AI assistant with **real-time voice conversation**, **photo understanding**, and a **local-first model strategy**: it runs models on your own machine through Ollama and falls back to cloud providers (Anthropic, OpenAI, Google Gemini, xAI Grok, Meta Llama) only when needed.
 
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
@@ -24,7 +24,7 @@
 7. [Quick Start](#quick-start)
 8. [Running with Docker](#running-with-docker)
 9. [Voice Mode (LiveKit)](#voice-mode-livekit)
-10. [Photo and Document Context](#photo-and-document-context)
+10. [Photo Context](#photo-context)
 11. [How Model Selection Works](#how-model-selection-works)
 12. [Configuration Reference](#configuration-reference)
 13. [Quality Checks](#quality-checks)
@@ -42,7 +42,7 @@
 **Copilot** is a full-stack AI chat application built around three ideas:
 
 - **Talk to it.** A voice mode gives you a hands-free, real-time conversation with live speech-to-text, turn detection, text-to-speech, and noise cancellation.
-- **Show it things.** Attach photos (and PDFs) so the assistant can summarize, extract information, and answer questions about what you provide.
+- **Show it things.** Attach photos so the assistant can summarize, extract information, and answer questions about what you provide.
 - **Keep it local when you can.** The app prefers models running on your own machine via [Ollama](https://ollama.com), so your data stays with you. If no local model is available, or one fails mid-request, it automatically falls back to a cloud provider.
 
 Voice conversations and typed conversations share the same chat history, so you can start by speaking and continue by typing (or vice versa).
@@ -52,35 +52,32 @@ Voice conversations and typed conversations share the same chat history, so you 
 ## Features
 
 ### Conversation
-- Streaming chat responses from local or cloud models
-- Chat history stored in the browser, with spoken transcripts saved into the same thread (tagged *Spoken*)
-- Model picker with **Auto**, **Local (Ollama)**, and **Cloud (fallback)** groups
+- Streaming chat responses from local or cloud models.
+- Chat history stored in the browser, with spoken transcripts saved into the same thread (tagged *Spoken*).
+- Model picker with **Auto**, **Local (Ollama)**, and **Cloud (fallback)** groups.
 
 ### Voice mode
-- Real-time speech-to-text, turn detection, text-to-speech, and noise cancellation via **LiveKit Inference**
-- Interrupt the assistant by simply talking over it, or press **Stop** / **Esc**
-- Voice replies use the *same model* you selected for text chat, with the same fallback behavior
-- If a model fails, the assistant says so out loud and the UI shows the reason
-- If the voice agent is not running, the UI tells you after 20 seconds
-- Configurable voice, language, greeting, and instructions
+- Real-time speech-to-text, turn detection, text-to-speech, and noise cancellation via **LiveKit Inference**.
+- Interrupt the assistant by simply talking over it, or press **Stop** / **Esc**.
+- Voice replies use the *same model* you selected for text chat, with the same fallback behavior.
+- Configurable voice, language, greeting, and instructions.
 
-### Photos and files
-- Add images with the **+** button, paste, or drag-and-drop (up to 5 per message; JPEG, PNG, WebP, GIF; 10 MB each)
-- Images are scaled to 2048 px on the long edge and re-encoded in the browser, which also **strips metadata such as GPS location**
-- Vision-capable models are clearly marked **"Sees images"** in the model menu; Auto selects one whenever a chat contains photos
-- PDF and visual context upload so the assistant can summarize, extract, and answer questions from provided files
+### Photos
+- Add images with the **+** button, paste, or drag-and-drop (up to 5 per message; JPEG, PNG, WebP, GIF; 10 MB each).
+- Images are scaled to 2048 px on the long edge and re-encoded in the browser, which also **strips metadata such as GPS location**.
+- Vision-capable models are clearly marked **"Sees images"** in the model menu; Auto selects one whenever a chat contains photos.
 
 ### Reliability
-- Automatic fallback to the next available model when a model fails before replying (Ollama stopped, model deleted, API key out of quota)
-- The reply includes a small note showing which model actually answered
-- Model lists are fetched live from each provider, so new models appear without code changes
+- Automatic fallback to the next available model when a model fails before replying (Ollama stopped, model deleted, API key out of quota).
+- The reply includes a small note showing which model actually answered.
+- Model lists are fetched live from each provider, so new models appear without code changes.
 
 ---
 
 ## Architecture
 
 ```
-Copilot/
+fullstack-ai-assistant/
 ├── api/     FastAPI backend (chat, model routing, voice sessions)
 ├── web/     Next.js frontend (chat UI, voice UI, photo handling)
 ├── agent/   LiveKit voice agent (STT → turn detection → reply → TTS)
@@ -118,7 +115,7 @@ Browser ──POST /api/voice/session──► API: creates room + token that di
 | **Backend** | Python 3.13, FastAPI, [uv](https://docs.astral.sh/uv/), Ruff, pytest, Ollama SDK, Anthropic and OpenAI SDKs |
 | **Frontend** | Next.js 16, React 19, TypeScript 7, Tailwind CSS 4, shadcn/ui |
 | **Voice** | LiveKit Cloud + LiveKit Inference (STT, TTS, turn detection, noise cancellation) |
-| **Local AI** | Ollama (default local model: `gemma3:1b`; `llama3.2` also works) |
+| **Local AI** | Ollama (default local model: `gemma3:1b`) |
 | **Cloud AI** | Anthropic, OpenAI, Google Gemini, xAI Grok, Meta Llama |
 | **Infra** | Docker and Docker Compose |
 
@@ -133,7 +130,6 @@ Browser ──POST /api/voice/session──► API: creates room + token that di
 | `agent/` | LiveKit voice agent (`voice_agent.py`) that bridges LiveKit audio to the API's chat endpoint |
 | `docker-compose.yml` | Orchestrates `api`, `web`, and optional `agent` and `ollama` services |
 | `AGENTS.md` | Conventions and commands for AI coding agents working in this repo |
-| `.claude/Skills/` | Claude Code skills for this project |
 
 ---
 
@@ -151,23 +147,28 @@ Browser ──POST /api/voice/session──► API: creates room + token that di
 
 ```bash
 # 1. Clone
-git clone https://github.com/raeesgul488/Copilot.git
-cd Copilot
+git clone <your-repo-url>
+cd fullstack-ai-assistant
 
 # 2. Pull a local model (optional but recommended)
-ollama pull llama3.2
+ollama pull gemma3
 
 # 3. Start the API  →  http://localhost:8000/docs
 cd api
 uv sync
 cp .env.example .env            # add cloud API keys here if you have them
-uv run fastapi dev app/main.py
+uv run fastapi dev
 
 # 4. Start the web app  →  http://localhost:3000   (open a new terminal)
 cd web
 npm install
 cp .env.example .env.local
 npm run dev
+
+# 5. Start the Voice Agent (optional, open a new terminal)
+cd agent
+uv sync
+uv run python voice_agent.py
 ```
 
 Open <http://localhost:3000> and start chatting.
@@ -195,18 +196,11 @@ docker compose up --build
 docker compose --profile voice up --build
 ```
 
-**Run Ollama inside Docker instead of on the host:**
-
-```bash
-docker compose --profile ollama up
-# then set OLLAMA_HOST=http://ollama:11434
-```
-
 ---
 
 ## Voice Mode (LiveKit)
 
-Voice mode appears as a **sound-wave button** in the empty message box once the API has LiveKit credentials. It requires a [LiveKit Cloud](https://cloud.livekit.io) project because speech-to-text, text-to-speech, turn detection, and noise cancellation run on LiveKit Inference.
+Voice mode appears as a **sound-wave button** in the empty message box once the API has LiveKit credentials. It requires a [LiveKit Cloud](https://cloud.livekit.io) project.
 
 ### Setup
 
@@ -216,14 +210,6 @@ Add the same three values from your LiveKit project to **both** `api/.env` and `
 LIVEKIT_URL=wss://<your-project>.livekit.cloud
 LIVEKIT_API_KEY=...
 LIVEKIT_API_SECRET=...
-```
-
-Start the voice agent in a new terminal (the API must already be running):
-
-```bash
-cd agent
-uv sync
-uv run python voice_agent.py dev
 ```
 
 ### Voice settings (`agent/.env`)
@@ -236,28 +222,19 @@ uv run python voice_agent.py dev
 | `VOICE_TTS_VOICE` | Voice used for replies |
 | `VOICE_GREETING` | What the assistant says when a session starts |
 | `VOICE_INSTRUCTIONS` | System instructions for voice conversations |
-| `VOICE_NOISE_CANCELLATION` | Toggle noise cancellation |
 | `VOICE_LLM` | `app` (use this app's model routing) or a LiveKit Inference model ID to bypass the app |
-
-To offer a voice picker in the UI, set `VOICE_VOICES` in `api/.env`.
-
-### Securing the voice endpoints
-
-- Anyone who can reach `/api/voice/session` can start a **billed** voice session. Put it behind your login before going public.
-- Set the same `VOICE_AGENT_TOKEN` in `api/.env` and `agent/.env` so only the agent can call `/api/voice/chat`.
 
 ---
 
-## Photo and Document Context
+## Photo Context
 
 Attach context to any message:
 
-- **How:** the **+** button, paste from clipboard, or drag-and-drop onto the page
-- **Limits:** up to 5 images per message, 10 MB each (JPEG, PNG, WebP, GIF)
-- **Processing:** scaled to 2048 px and re-encoded in the browser; metadata (including GPS) is removed
-- **HEIC:** not supported yet; the app explains how to share a JPEG instead
-- **Storage:** photos are kept in the browser (IndexedDB) next to chat history; photos no chat uses are cleaned up after a day
-- **Privacy indicator:** the line under the input says whether photos stay on your computer or which provider receives them
+- **How:** the **+** button, paste from clipboard, or drag-and-drop onto the page.
+- **Limits:** up to 5 images per message, 10 MB each (JPEG, PNG, WebP, GIF).
+- **Processing:** scaled to 2048 px and re-encoded in the browser; metadata (including GPS) is removed.
+- **Storage:** photos are kept in the browser (IndexedDB) next to chat history.
+- **Privacy indicator:** the line under the input says whether photos stay on your computer or which provider receives them.
 
 **Models that can see images:**
 
@@ -265,9 +242,7 @@ Attach context to any message:
 ollama pull gemma3        # or: llava, qwen2.5vl
 ```
 
-or add a cloud API key for a vision-capable provider. The model menu marks these **"Sees images"**. If you pick a text-only model for a chat with photos, a notice offers a one-click switch.
-
-Upload limits are configurable in `api/.env` (see `api/README.md`).
+The model menu marks these **"Sees images"**. If you pick a text-only model for a chat with photos, a notice offers a one-click switch.
 
 ---
 
@@ -281,8 +256,6 @@ Upload limits are configurable in `api/.env` (see `api/README.md`).
 
 **Automatic fallback:** if the chosen model fails before replying, the API tries the next option and the reply notes which model answered. Disable with `ALLOW_CLOUD_FALLBACK=false` in `api/.env`.
 
-**Cloud ordering:** `CLOUD_PRIORITY` sets the provider order; `*_MODEL` variables (for example `OPENAI_MODEL`) set each provider's preferred fallback model.
-
 ---
 
 ## Configuration Reference
@@ -294,19 +267,11 @@ Copy `.env.example` to `.env` (API, agent) or `.env.local` (web) and adjust.
 | Variable | Purpose |
 | --- | --- |
 | `OLLAMA_HOST` | Ollama address (default `http://localhost:11434`) |
-| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, … | Cloud provider keys (exact names: see `.env.example`) |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc. | Cloud provider keys |
 | `CLOUD_PRIORITY` | Order in which cloud providers are tried |
-| `*_MODEL` | Preferred model per provider |
 | `ALLOW_CLOUD_FALLBACK` | `true`/`false`: allow automatic fallback |
-| `ENVIRONMENT` | Set to `production` to hide `/docs` |
-| `CORS_ORIGINS` | Allowed origins if the API is called from another domain |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Enables voice mode |
 | `VOICE_AGENT_TOKEN` | Shared secret protecting `/api/voice/chat` |
-| `VOICE_VOICES` | Voices offered in the UI voice picker |
-
-### `agent/.env`
-
-LiveKit credentials, `VOICE_AGENT_TOKEN`, and the `VOICE_*` settings listed in [Voice Mode](#voice-mode-livekit).
 
 ---
 
@@ -324,22 +289,21 @@ cd web && npm run typecheck && npm run build
 
 ## Production Checklist
 
-- [ ] Serve both services over **HTTPS** (reverse proxy or platform load balancer)
-- [ ] Keep response **buffering off** for `/api/chat` so replies stream
-- [ ] Set `ENVIRONMENT=production` and a real `CORS_ORIGINS`
-- [ ] Add **authentication and rate limiting**: cloud and voice calls cost money
-- [ ] Protect `/api/voice/session` and set `VOICE_AGENT_TOKEN`
-- [ ] Add a **database** when you add user accounts (chat history currently lives in each user's browser)
-- [ ] Never commit `.env` files, API keys, or credentials
+- [ ] Serve both services over **HTTPS**.
+- [ ] Keep response **buffering off** for `/api/chat` so replies stream.
+- [ ] Set `ENVIRONMENT=production` and a real `CORS_ORIGINS`.
+- [ ] Add **authentication and rate limiting**.
+- [ ] Protect `/api/voice/session` and set `VOICE_AGENT_TOKEN`.
+- [ ] Never commit `.env` files, API keys, or credentials.
 
 ---
 
 ## Security and Privacy Notes
 
 - **Local-first by default:** with Ollama running, prompts and images do not leave your machine.
-- **Cloud fallback sends data to a provider:** the UI shows which provider receives your photos. Set `ALLOW_CLOUD_FALLBACK=false` to stay fully local.
+- **Cloud fallback sends data to a provider:** the UI shows which provider receives your photos.
 - **Metadata is stripped** from images in the browser before upload.
-- **Secrets** belong in environment variables only, never in source control.
+- **Secrets** belong in environment variables only.
 
 ---
 
@@ -347,14 +311,10 @@ cd web && npm run typecheck && npm run build
 
 | Problem | Likely cause and fix |
 | --- | --- |
-| No local models in the dropdown | Ollama isn't running or no model is pulled. Run `ollama pull llama3.2`. |
-| Reply came from a different model than selected | The chosen model failed and fallback kicked in. Check Ollama and API key quota. |
+| No local models in the dropdown | Ollama isn't running or no model is pulled. Run `ollama pull gemma3`. |
 | Voice button doesn't appear | LiveKit credentials are missing from `api/.env`. |
-| "Voice agent not running" after 20 seconds | Start it: `cd agent && uv run python voice_agent.py dev`. |
-| Voice agent can't reach `/api/voice/chat` | `VOICE_AGENT_TOKEN` differs between `api/.env` and `agent/.env`. |
+| "Voice agent not running" | Start it: `cd agent && uv run python voice_agent.py`. |
 | Photos rejected | Check format (no HEIC), size (≤ 10 MB), and count (≤ 5). |
-| Docker API can't reach Ollama | Make sure Ollama is running on the host, or use `--profile ollama` and set `OLLAMA_HOST`. |
-| Replies don't stream in production | Proxy buffering is on for `/api/chat`. Turn it off. |
 
 ---
 
@@ -363,7 +323,6 @@ cd web && npm run typecheck && npm run build
 - HEIC image support
 - User accounts with server-side chat history
 - Built-in authentication and rate limiting
-- Expanded document (PDF) tooling
 
 ---
 
@@ -371,23 +330,7 @@ cd web && npm run typecheck && npm run build
 
 Contributions are welcome. Please follow the project conventions in [`AGENTS.md`](AGENTS.md):
 
-- Use `uv` for Python dependencies and `npm` for frontend dependencies
-- Use Ruff for Python linting and formatting
-- Run relevant tests after every change
-- Keep changes minimal and follow existing patterns
-- Don't add dependencies unless necessary
-- Never commit `.env`, API keys, secrets, or credentials
-
----
-
-## Author & Contact
-
-**Raees Ahmad**
-
-| | |
-| --- | --- |
-| **GitHub** | [github.com/raeesgul488](https://github.com/raeesgul488) |
-| **LinkedIn** | [Raees Ahmad](https://www.linkedin.com/in/raees-ahmad-336a57355/) |
-| **Email** | [raeesahm65@gmail.com](mailto:raeesahm65@gmail.com) |
-
-Questions, bug reports, and pull requests are welcome. Open an [issue](https://github.com/raeesgul488/Copilot/issues) or reach out directly.
+- Use `uv` for Python dependencies and `npm` for frontend dependencies.
+- Use Ruff for Python linting and formatting.
+- Run relevant tests after every change.
+- Never commit `.env` files.
