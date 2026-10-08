@@ -1,4 +1,4 @@
-# Voice-Enabled, Local-AI Assistant
+# Voxa —Voice-Enabled AI Assistant
 
 > An interactive AI assistant with **real-time voice conversation**, **photo understanding**, and a **local-first model strategy**: it runs models on your own machine through Ollama and falls back to cloud providers (Anthropic, OpenAI, Google Gemini, xAI Grok, Meta Llama) only when needed.
 
