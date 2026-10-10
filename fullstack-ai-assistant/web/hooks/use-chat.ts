@@ -6,13 +6,41 @@ import { streamChat, type ApiMessage } from "@/lib/api";
 import { makeTitle, readStorage, uid, writeStorage } from "@/lib/helpers";
 import { collectGarbage, loadImage } from "@/lib/image-store";
 import { blobToBase64, photoLabel, textWithPhotoNote } from "@/lib/images";
-import type { ChatImage, ChatMessage, Conversation, ModelSelection } from "@/lib/types";
+import type {
+  ChatFile,
+  ChatImage,
+  ChatMessage,
+  CollectionRef,
+  Conversation,
+  ModelSelection,
+} from "@/lib/types";
 
 const KEY = "assistant.conversations.v1";
 const MAX_SAVED = 200;
 const GC_GRACE_MS = 24 * 60 * 60 * 1000;
 
 type Updater = (c: Conversation) => Conversation;
+
+/** Every file added anywhere in the chat: later questions still search them. */
+export const filesOf = (messages: ChatMessage[]): ChatFile[] =>
+  messages.flatMap((m) => (m.role === "user" ? (m.files ?? []) : []));
+
+/** What to search for this reply: the collections picked for the last question,
+ *  plus every file in the chat. Empty → an ordinary model reply. */
+function ragFor(history: ChatMessage[], chatId: string) {
+  const lastUser = [...history].reverse().find((m) => m.role === "user");
+  const collections = (lastUser?.collections ?? []).map((c) => c.id);
+  const files = [...new Set(filesOf(history).map((f) => f.id))];
+  return collections.length || files.length ? { collections, files, chat_id: chatId } : null;
+}
+
+export interface SendOptions {
+  images?: ChatImage[];
+  files?: ChatFile[];
+  collections?: CollectionRef[];
+  /** Id for a new chat (files are uploaded under it before the chat exists). */
+  newChatId?: string;
+}
 
 export interface ImagePolicy {
   /** False when the chosen model is text-only: photos are described as text instead. */
@@ -157,11 +185,19 @@ export function useChat(
         await streamChat({
           messages,
           selection: selectionRef.current,
+          rag: ragFor(history, convId),
           signal: ctrl.signal,
           onMeta: (meta) => patchMessage(convId, reply.id, { meta }),
           onDelta: (text) => {
             buffer += text;
             if (!frame) frame = requestAnimationFrame(flush);
+          },
+          onSources: (s) => {
+            cancelAnimationFrame(frame);
+            frame = 0;
+            buffer = "";
+            // The final text carries [n] markers that link to these passages.
+            patchMessage(convId, reply.id, { content: s.cited_text, sources: s.sources });
           },
         });
       } catch (err) {
@@ -188,24 +224,33 @@ export function useChat(
   );
 
   const send = useCallback(
-    (text: string, images: ChatImage[] = []) => {
+    (text: string, opts: SendOptions = {}) => {
+      const { images = [], files = [], collections = [] } = opts;
       const content = text.trim();
-      if ((!content && !images.length) || controller.current) return;
+      if ((!content && !images.length && !files.length) || controller.current) return;
       const userMsg: ChatMessage = {
         id: uid(),
         role: "user",
         content,
         createdAt: Date.now(),
         ...(images.length ? { images } : {}),
+        ...(files.length ? { files } : {}),
+        ...(collections.length ? { collections } : {}),
       };
       const existing = conversations.find((c) => c.id === activeId);
       if (existing) {
         void generate(existing.id, [...existing.messages.filter((m) => !m.error), userMsg]);
         return;
       }
+      const fallbackTitle = files.length
+        ? files[0].name
+        : images.length > 1
+          ? `${images.length} photos`
+          : "Photo";
       const conv: Conversation = {
-        id: uid(),
-        title: makeTitle(content || (images.length > 1 ? `${images.length} photos` : "Photo")),
+        id: opts.newChatId ?? uid(),
+        title: makeTitle(content || fallbackTitle),
+        ...(collections.length ? { collections } : {}),
         messages: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -237,6 +282,13 @@ export function useChat(
       patchMessage(activeId, messageId, (m) => ({ feedback: m.feedback === value ? null : value }));
     },
     [activeId, patchMessage],
+  );
+
+  /** The collections a chat searches (the Library pill). */
+  const setCollections = useCallback(
+    (id: string, collections: CollectionRef[]) =>
+      update(id, (c) => ({ ...c, collections })),
+    [update],
   );
 
   const newChat = useCallback(() => {
@@ -331,6 +383,7 @@ export function useChat(
     stop,
     regenerate,
     setFeedback,
+    setCollections,
     newChat,
     openChat,
     deleteChat,

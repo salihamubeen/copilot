@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.library import LibrarySettings
 from app.main import create_app
 from app.providers.base import Provider, ProviderError
 from app.providers.registry import ProviderRegistry
@@ -86,13 +87,37 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def make_client(settings: Settings) -> Iterator:
+def library_settings(tmp_path) -> LibrarySettings:
+    """Library off by default in tests; data in a temp folder."""
+    return LibrarySettings(
+        _env_file=None,
+        rag_engine="",
+        gemini_api_key=None,
+        library_token=None,
+        library_data_dir=tmp_path / "library",
+    )
+
+
+@pytest.fixture
+def make_client(settings: Settings, library_settings: LibrarySettings) -> Iterator:
     clients: list[TestClient] = []
 
-    def factory(*providers: Provider, **overrides) -> TestClient:
+    def factory(
+        *providers: Provider,
+        library: LibrarySettings | None = None,
+        library_engine=None,
+        **overrides,
+    ) -> TestClient:
         cfg = settings.model_copy(update=overrides)
         registry = ProviderRegistry(list(providers), cache_ttl=0, vision_patterns=cfg.vision_models)
-        client = TestClient(create_app(cfg, registry))
+        client = TestClient(
+            create_app(
+                cfg,
+                registry,
+                library_settings=library or library_settings,
+                library_engine=library_engine,
+            )
+        )
         client.__enter__()
         clients.append(client)
         return client

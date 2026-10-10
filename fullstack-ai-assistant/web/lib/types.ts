@@ -64,6 +64,32 @@ export interface ChatImage {
   resizedFrom?: string;
 }
 
+/** A file added to a chat. The original and its index live on the API (Library). */
+export interface ChatFile {
+  id: string;
+  name: string;
+  ext: string;
+  size: number;
+}
+
+/** A Library collection searched for a message. */
+export interface CollectionRef {
+  id: string;
+  name: string;
+}
+
+/** A passage an answer was based on; `number` matches the [n] in the text. */
+export interface Citation {
+  number: number;
+  title: string;
+  text: string;
+  page: number | null;
+  cited: boolean;
+  document_id: string | null;
+  kind: "library" | "chat" | null;
+  collection: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   role: Role;
@@ -77,12 +103,20 @@ export interface ChatMessage {
   voice?: boolean;
   /** Photos attached to a user message. */
   images?: ChatImage[];
+  /** Files added with a user message (searched for this and later questions). */
+  files?: ChatFile[];
+  /** Library collections searched for this user message. */
+  collections?: CollectionRef[];
+  /** Assistant: passages the answer cites ([n] markers in `content`). */
+  sources?: Citation[];
 }
 
 export interface Conversation {
   id: string;
   title: string;
   messages: ChatMessage[];
+  /** Library collections this chat searches (the pill in the composer). */
+  collections?: CollectionRef[];
   createdAt: number;
   updatedAt: number;
 }

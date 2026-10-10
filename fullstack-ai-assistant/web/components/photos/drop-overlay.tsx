@@ -12,10 +12,12 @@ export function PhotoDropZone({
   enabled,
   onFiles,
   limitText,
+  title = "Drop photos to add them",
 }: {
   enabled: boolean;
   onFiles: (files: File[]) => void;
   limitText: string;
+  title?: string;
 }) {
   const [over, setOver] = useState(false);
   const live = useRef({ enabled, onFiles });
@@ -87,7 +89,7 @@ export function PhotoDropZone({
     <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-background/80 p-6 backdrop-blur-sm" aria-hidden>
       <div className="flex w-full max-w-md flex-col items-center gap-2 rounded-3xl border-2 border-dashed border-foreground/30 bg-card px-6 py-10 text-center shadow-lg">
         <ImagePlusIcon className="size-8" />
-        <p className="text-base font-semibold">Drop photos to add them</p>
+        <p className="text-base font-semibold">{title}</p>
         <p className="text-sm text-muted-foreground">{limitText}</p>
       </div>
     </div>

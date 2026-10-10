@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { CloudIcon, LockIcon, PanelLeftIcon, SquarePenIcon } from "lucide-react";
+import { CloudIcon, LibraryIcon, LockIcon, PanelLeftIcon, SquarePenIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/chat/app-sidebar";
-import { Composer } from "@/components/chat/composer";
+import { Composer, type ComposerFiles } from "@/components/chat/composer";
 import { EmptyState, SuggestionGrid } from "@/components/chat/empty-state";
 import { Markdown } from "@/components/chat/markdown";
 import { MessageList } from "@/components/chat/message-list";
@@ -19,11 +19,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { VoiceLoading, VoiceTimer } from "@/components/voice/voice-chrome";
 import { useAttachments } from "@/hooks/use-attachments";
 import { useChat } from "@/hooks/use-chat";
+import { useChatFiles } from "@/hooks/use-chat-files";
+import { useLibraryConfig } from "@/hooks/use-library-config";
 import { useModels } from "@/hooks/use-models";
 import { useVoiceConfig } from "@/hooks/use-voice-config";
 import { APP_CONFIG } from "@/lib/config";
-import { DEFAULT_IMAGE_LIMITS, textWithPhotoNote } from "@/lib/images";
-import type { ChatMessage, ModelInfo } from "@/lib/types";
+import { uid } from "@/lib/helpers";
+import { DEFAULT_IMAGE_LIMITS, looksLikeImage, textWithPhotoNote } from "@/lib/images";
+import { deleteChatFile, formatSize } from "@/lib/library";
+import type { ChatMessage, CollectionRef, ModelInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // LiveKit is only downloaded when someone starts voice mode.
@@ -72,6 +76,22 @@ export function ChatApp() {
   const empty = !chat.active || chat.active.messages.length === 0;
   const noModels = !models.loading && !models.effective;
   const voiceEnabled = !!voiceSetup.config?.enabled && !noModels;
+
+  // ---- files and the Library ----
+  const library = useLibraryConfig();
+  const fileLimits = library.config?.limits ?? null;
+  const chatFiles = useChatFiles(library.enabled ? fileLimits : null);
+  // Files are uploaded before a new chat exists, under the id it will get.
+  const [draftId, setDraftId] = useState(uid);
+  const [draftCollections, setDraftCollections] = useState<CollectionRef[]>([]);
+  const chatId = chat.active?.id ?? draftId;
+  const collections = chat.active ? (chat.active.collections ?? []) : draftCollections;
+  const selectCollections = (next: CollectionRef[]) =>
+    chat.active ? chat.setCollections(chat.active.id, next) : setDraftCollections(next);
+  const addFiles = (files: File[]) => chatFiles.add(files, chatId);
+  const chatHasFiles = !!chat.active?.messages.some((m) => m.files?.length);
+  const usesLibrary =
+    library.enabled && (collections.length > 0 || chatFiles.items.length > 0 || chatHasFiles);
 
   const pendingPhotos = attachments.items.length > 0;
   const chatHasPhotos = !!chat.active?.messages.some((m) => m.images?.length);
@@ -149,14 +169,48 @@ export function ChatApp() {
           answer.
         </>
       )
+    ) : usesLibrary ? (
+      library.config?.engine === "gemini" ? (
+        <>
+          <LibraryIcon className="mr-1 inline size-3 align-[-1px]" />
+          Questions about files are answered by <b className="font-medium">Gemini File Search</b>{" "}
+          (Google), only from the documents you picked.
+        </>
+      ) : library.config?.engine === "offline" ? (
+        <>
+          <LibraryIcon className="mr-1 inline size-3 align-[-1px]" />
+          Questions about files use offline test search on this server.
+        </>
+      ) : (
+        <>
+          <LibraryIcon className="mr-1 inline size-3 align-[-1px]" />
+          Questions about files are answered by <b className="font-medium">{library.config?.label}</b>
+          {library.config?.local ? " on your servers" : ""}, only from the documents you picked.
+        </>
+      )
     ) : (
       "AI can make mistakes. Check important information."
     );
 
+  // Sends text with whatever photos and files are in the trays.
+  const send = (text: string) => {
+    const isNew = !chat.active;
+    chat.send(text, {
+      images: attachments.takeAll(),
+      files: chatFiles.takeReady(),
+      collections,
+      ...(isNew ? { newChatId: draftId } : {}),
+    });
+    if (isNew) {
+      setDraftId(uid());
+      setDraftCollections([]);
+    }
+  };
+
   // A suggestion is sent like typed text, with any photos in the tray.
   const sendSuggestion = (text: string) => {
-    if (blocked || attachments.processing || chat.streaming) return;
-    chat.send(text, attachments.takeAll());
+    if (blocked || attachments.processing || chatFiles.busy || chat.streaming) return;
+    send(text);
   };
 
   // ---- voice mode ----
@@ -203,29 +257,81 @@ export function ChatApp() {
   );
 
   // ---- navigation (ends voice mode first) ----
+  // Files waiting in the composer belong to the chat they were added in.
+  const discardFiles = chatFiles.discard;
   const newChat = useCallback(() => {
     setVoice(null);
+    discardFiles();
     chat.newChat();
     setMobileOpen(false);
-  }, [chat]);
+  }, [chat, discardFiles]);
 
   const openChat = (id: string) => {
     if (voice && id !== voiceConversation.current) setVoice(null);
+    if (id !== chat.activeId) discardFiles();
     chat.openChat(id);
     setMobileOpen(false);
   };
 
+  // Deleted chats take their files off the server once the undo window closes.
+  const deleteWithUndo = (message: string, ids: string[], undo: () => void) => {
+    let undone = false;
+    const purge = () => {
+      if (!undone) for (const fid of ids) void deleteChatFile(fid);
+    };
+    toast(message, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          undone = true;
+          undo();
+        },
+      },
+      onAutoClose: purge,
+      onDismiss: purge,
+    });
+  };
+  const fileIds = (ids: string[]) =>
+    chat.conversations
+      .filter((c) => ids.includes(c.id))
+      .flatMap((c) => c.messages.flatMap((m) => (m.files ?? []).map((f) => f.id)));
+
   const deleteChat = (id: string) => {
     if (voice && id === voiceConversation.current) setVoice(null);
-    const undo = chat.deleteChat(id);
-    toast("Chat deleted", { action: { label: "Undo", onClick: undo } });
+    const ids = fileIds([id]);
+    deleteWithUndo("Chat deleted", ids, chat.deleteChat(id));
   };
 
   const clearAll = () => {
     setVoice(null);
-    const undo = chat.clearAll();
-    toast("All chats deleted", { action: { label: "Undo", onClick: undo } });
+    const ids = fileIds(chat.conversations.map((c) => c.id));
+    deleteWithUndo("All chats deleted", ids, chat.clearAll());
   };
+
+  // Dropped files: photos go to the photo tray, documents to the file tray.
+  const onDrop = (files: File[]) => {
+    const photos = files.filter(looksLikeImage);
+    const docs = files.filter((f) => !looksLikeImage(f));
+    if (photos.length) attachments.add(photos);
+    if (docs.length) {
+      if (library.enabled) addFiles(docs);
+      else attachments.add(docs); // shows "not a photo"
+    }
+  };
+
+  const composerFiles: ComposerFiles | undefined =
+    library.enabled && fileLimits
+      ? {
+          files: chatFiles,
+          onAdd: addFiles,
+          accept: fileLimits.extensions.join(","),
+          perMessage: fileLimits.chat_files_per_message,
+          maxBytes: fileLimits.chat_file_max_bytes,
+          collections: library.config?.collections ?? [],
+          selected: collections,
+          onSelect: selectCollections,
+        }
+      : undefined;
 
   // Global shortcuts: new chat, search, stop. (Voice mode handles its own Esc.)
   useEffect(() => {
@@ -255,14 +361,16 @@ export function ChatApp() {
     onDelete: deleteChat,
     onClearAll: clearAll,
     apiOnline: !models.error,
+    showLibrary: library.enabled,
   };
 
   const composer = (
     <Composer
-      onSend={chat.send}
+      onSend={send}
       onStop={chat.stop}
       onVoice={voiceEnabled ? startVoice : undefined}
       attachments={attachments}
+      library={composerFiles}
       photoLimit={limits.per_message}
       notice={notice}
       blocked={blocked}
@@ -374,8 +482,13 @@ export function ChatApp() {
       </main>
       <PhotoDropZone
         enabled={!voice && !noModels}
-        onFiles={attachments.add}
-        limitText={`JPEG, PNG, WebP or GIF · up to ${limits.per_message} photos, ${Math.round(limits.max_bytes / 1048576)} MB each`}
+        onFiles={onDrop}
+        title={library.enabled ? "Drop photos or files to add them" : undefined}
+        limitText={
+          library.enabled && fileLimits
+            ? `Photos up to ${Math.round(limits.max_bytes / 1048576)} MB · files up to ${formatSize(fileLimits.chat_file_max_bytes)}`
+            : `JPEG, PNG, WebP or GIF · up to ${limits.per_message} photos, ${Math.round(limits.max_bytes / 1048576)} MB each`
+        }
       />
     </div>
   );

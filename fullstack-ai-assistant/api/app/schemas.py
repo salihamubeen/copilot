@@ -54,8 +54,20 @@ MAX_REQUEST_MESSAGES = 500
 MAX_REQUEST_IMAGES = 100
 
 
+class RagScope(BaseModel):
+    """Answer from documents: Library collections and/or files added to this chat."""
+
+    collections: list[str] = Field(default_factory=list, max_length=20)
+    files: list[str] = Field(default_factory=list, max_length=50)
+    # The chat the files belong to; files from other chats are ignored.
+    chat_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=MAX_REQUEST_MESSAGES)
+    rag: RagScope | None = Field(
+        default=None, description="Search these collections/files and answer with citations"
+    )
     provider: str | None = Field(
         default=None, description="Provider id, e.g. 'ollama' or 'openai'. Omit for automatic."
     )
